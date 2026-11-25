@@ -121,6 +121,17 @@ section.cat > p{margin:0 0 12px;color:var(--muted);font-size:14px;font-weight:60
 .order .acts button.main{background:var(--navy);color:#fff}
 .ex{font-size:11px;font-weight:800;color:var(--muted);background:#eef0f6;border-radius:6px;padding:1px 6px}
 .empty{text-align:center;color:var(--muted);font-weight:700;padding:24px}
+.prices{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:6px 14px;margin:6px 0 10px}
+.prices h3{font-size:15px;font-weight:600;color:var(--pink);margin:12px 0 2px}
+.prow{display:grid;grid-template-columns:1fr 112px;gap:10px;align-items:center;padding:7px 0;border-bottom:1px dashed var(--line)}
+.prow:last-child{border-bottom:0}
+.prow span{font-weight:700;min-width:0}
+.prow small{display:block;color:var(--muted);font-weight:600;font-variant-numeric:tabular-nums}
+.pin{display:flex;align-items:center;border:2px solid var(--line);border-radius:12px;background:var(--bg);padding:0 10px}
+.pin input{border:0;background:transparent;font:inherit;font-weight:800;color:var(--navy);width:100%;padding:8px 0;text-align:right;font-variant-numeric:tabular-nums}
+.pin b{margin-left:4px}
+.prow.changed .pin{border-color:var(--pink)}
+.saved{color:var(--ok);font-weight:800;font-size:14px;min-height:20px;margin:0 0 6px}
 .foot{text-align:center;color:var(--muted);font-size:13px;font-weight:600;margin-top:20px}
 @media (max-width:380px){.modes{grid-template-columns:1fr}.hero{grid-template-columns:1fr 84px}.hero img{width:84px}}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
@@ -160,6 +171,11 @@ section.cat > p{margin:0 0 12px;color:var(--muted);font-size:14px;font-weight:60
     <p>Questa è la parte che vedi tu allo stand: ogni ordine arriva qui con l'ora di ritiro e se è già pagato.</p>
     <div class="stats" id="stats"></div>
     <div id="orders"></div>
+    <h1 style="margin-top:22px">Prezzi del menu</h1>
+    <p>Cambia un prezzo e il menu clienti si aggiorna subito. In questa demo i prezzi restano salvati solo su questo telefono.</p>
+    <div class="prices" id="prices"></div>
+    <p class="saved" id="savedMsg" role="status"></p>
+    <p class="foot" style="margin-top:0"><button type="button" id="resetPrices" style="border:0;background:none;color:var(--muted);text-decoration:underline;font-weight:700">Ripristina i prezzi di partenza</button></p>
     <button class="cta" id="backFront" type="button" style="margin-top:12px">Torna al menu clienti</button>
     <p class="foot"><button type="button" id="resetDemo" style="border:0;background:none;color:var(--muted);text-decoration:underline;font-weight:700">Azzera la demo</button></p>
   </main>
@@ -272,6 +288,21 @@ function seed(){const t=slotsList();return[
   {code:"T-209",name:"Ufficio Rossi",mode:"event",when:"sab 16:00",items:[["box12",3]],total:90,paid:false,status:"new",ex:true,note:"Acconto 45 € da chiedere"}]}
 if(!ORDERS) ORDERS=seed();
 
+const BASE_PRICES=Object.fromEntries(allItems().map(i=>[i.id,i.p]));
+function applyPrices(){let saved={};try{saved=JSON.parse(localStorage.getItem("tomm-prices")||"{}")||{}}catch(e){}
+  allItems().forEach(i=>{const v=saved[i.id];i.p=(typeof v==="number"&&v>0)?v:BASE_PRICES[i.id]})}
+function savePrices(){const o={};allItems().forEach(i=>{if(i.p!==BASE_PRICES[i.id])o[i.id]=i.p});try{localStorage.setItem("tomm-prices",JSON.stringify(o))}catch(e){}}
+applyPrices();
+function renderPrices(){
+  $("#prices").innerHTML=MENU.map(c=>`<h3>${c.name}</h3>${c.items.map(i=>`<div class="prow${i.p!==BASE_PRICES[i.id]?" changed":""}"><span>${i.n}${i.p!==BASE_PRICES[i.id]?`<small>prima ${eur(BASE_PRICES[i.id])}</small>`:""}</span><label class="pin" for="pr-${i.id}"><input id="pr-${i.id}" data-price="${i.id}" inputmode="decimal" value="${i.p.toFixed(2).replace(".",",")}" aria-label="Prezzo ${i.n}"><b>€</b></label></div>`).join("")}`).join("");
+}
+function setPrice(inp){
+  const v=parseFloat(inp.value.replace(",",".").replace(/[^\d.]/g,""));const it=find(inp.dataset.price);
+  if(!(v>0)||v>999){inp.value=it.p.toFixed(2).replace(".",",");$("#savedMsg").textContent="Scrivi un prezzo valido, per esempio 2,50.";$("#savedMsg").style.color="#c0164e";return}
+  it.p=Math.round(v*100)/100;savePrices();renderPrices();renderMenu();
+  $("#savedMsg").style.color="";$("#savedMsg").textContent=`Salvato: ${it.n} ora costa ${eur(it.p)}.`;
+}
+
 function submit(){
   const f=formVals(),err=$("#err");
   if(!f.name){err.textContent="Scrivi il tuo nome, così ti riconosciamo allo stand.";return}
@@ -297,6 +328,7 @@ function showDone(code,when,t,name){
 }
 
 function renderShop(){
+  renderPrices();
   const label={pickup:"Paga allo stand",online:"Online",whatsapp:"WhatsApp",event:"Evento"};
   const st={new:"Nuovo",ready:"Pronto",done:"Ritirato"};
   const today=ORDERS.filter(o=>o.status!=="done");
@@ -331,10 +363,13 @@ document.addEventListener("click",e=>{
     const{t}=totals();ORDERS.unshift({code:"T-"+(215+ORDERS.filter(o=>!o.ex).length),name:f.name,mode,when:slot,items:Object.entries(cart),total:t,paid:false,status:"new",note:f.note});saveOrders(ORDERS);return}
   if(b.id==="seeShop"){closeSheet();go("shop");return}
   if(b.id==="backFront"){go("front");return}
+  if(b.id==="resetPrices"){try{localStorage.removeItem("tomm-prices")}catch(e){}applyPrices();renderPrices();renderMenu();$("#savedMsg").style.color="";$("#savedMsg").textContent="Prezzi di partenza ripristinati.";return}
   if(b.id==="resetDemo"){ORDERS=seed();saveOrders(ORDERS);renderShop();return}
   if(b.dataset.st){const[i,s]=b.dataset.st.split(":");ORDERS[i].status=s;if(s==="done")ORDERS[i].paid=true;saveOrders(ORDERS);renderShop();return}
 });
 document.addEventListener("input",e=>{if(mode==="whatsapp"&&$("#waPreview")&&e.target.closest("#panel"))updateWA()});
+document.addEventListener("change",e=>{if(e.target.dataset.price)setPrice(e.target)});
+document.addEventListener("keydown",e=>{if(e.key==="Enter"&&e.target.dataset.price)e.target.blur()});
 $("#sheet").addEventListener("click",e=>{if(e.target.id==="sheet")closeSheet()});
 document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!$("#sheet").hidden)closeSheet()});
 window.addEventListener("hashchange",()=>{const v=location.hash==="#negozio"?"shop":"front";if(v!==VIEW){VIEW=v;route()}});
