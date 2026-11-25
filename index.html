@@ -123,7 +123,7 @@ section.cat > p{margin:0 0 12px;color:var(--muted);font-size:14px;font-weight:60
 .empty{text-align:center;color:var(--muted);font-weight:700;padding:24px}
 .prices{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:6px 14px;margin:6px 0 10px}
 .prices h3{font-size:15px;font-weight:600;color:var(--pink);margin:12px 0 2px}
-.prow{display:grid;grid-template-columns:1fr 112px;gap:10px;align-items:center;padding:7px 0;border-bottom:1px dashed var(--line)}
+.prow{display:grid;grid-template-columns:1fr auto 104px;gap:10px;align-items:center;padding:7px 0;border-bottom:1px dashed var(--line)}
 .prow:last-child{border-bottom:0}
 .prow span{font-weight:700;min-width:0}
 .prow small{display:block;color:var(--muted);font-weight:600;font-variant-numeric:tabular-nums}
@@ -131,6 +131,17 @@ section.cat > p{margin:0 0 12px;color:var(--muted);font-size:14px;font-weight:60
 .pin input{border:0;background:transparent;font:inherit;font-weight:800;color:var(--navy);width:100%;padding:8px 0;text-align:right;font-variant-numeric:tabular-nums}
 .pin b{margin-left:4px}
 .prow.changed .pin{border-color:var(--pink)}
+.prow.off span{color:var(--muted);text-decoration:line-through}
+.sw{position:relative;display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:800;color:var(--ok);cursor:pointer}
+.sw input{position:absolute;opacity:0;width:1px;height:1px}
+.sw i{width:40px;height:24px;border-radius:999px;background:var(--ok);position:relative;flex:none;transition:background .15s}
+.sw i::after{content:"";position:absolute;top:3px;left:19px;width:18px;height:18px;border-radius:50%;background:#fff;transition:left .15s}
+.sw input:not(:checked)+i{background:#c9cede}
+.sw input:not(:checked)+i::after{left:3px}
+.sw input:focus-visible+i{outline:3px solid var(--sky);outline-offset:2px}
+.sw input:not(:checked)~em{color:var(--muted)}
+.sw em{font-style:normal;width:44px}
+@media (max-width:380px){.sw em{display:none}}
 .saved{color:var(--ok);font-weight:800;font-size:14px;min-height:20px;margin:0 0 6px}
 .foot{text-align:center;color:var(--muted);font-size:13px;font-weight:600;margin-top:20px}
 @media (max-width:380px){.modes{grid-template-columns:1fr}.hero{grid-template-columns:1fr 84px}.hero img{width:84px}}
@@ -138,7 +149,6 @@ section.cat > p{margin:0 0 12px;color:var(--muted);font-size:14px;font-weight:60
 </style>
 </head>
 <body>
-
 
 <div class="wrap">
   <div class="demo"><span>DEMO · nessun ordine o pagamento reale</span><a href="#negozio" id="toShop">Vista negozio →</a></div>
@@ -171,11 +181,11 @@ section.cat > p{margin:0 0 12px;color:var(--muted);font-size:14px;font-weight:60
     <p>Questa è la parte che vedi tu allo stand: ogni ordine arriva qui con l'ora di ritiro e se è già pagato.</p>
     <div class="stats" id="stats"></div>
     <div id="orders"></div>
-    <h1 style="margin-top:22px">Prezzi del menu</h1>
-    <p>Cambia un prezzo e il menu clienti si aggiorna subito. In questa demo i prezzi restano salvati solo su questo telefono.</p>
+    <h1 style="margin-top:22px">Prodotti e prezzi</h1>
+    <p>Spegni un prodotto quando è finito o non lo fai oggi: sparisce dal menu clienti. Cambia un prezzo e il menu si aggiorna subito. In questa demo tutto resta salvato solo su questo telefono.</p>
     <div class="prices" id="prices"></div>
     <p class="saved" id="savedMsg" role="status"></p>
-    <p class="foot" style="margin-top:0"><button type="button" id="resetPrices" style="border:0;background:none;color:var(--muted);text-decoration:underline;font-weight:700">Ripristina i prezzi di partenza</button></p>
+    <p class="foot" style="margin-top:0"><button type="button" id="resetPrices" style="border:0;background:none;color:var(--muted);text-decoration:underline;font-weight:700">Ripristina prodotti e prezzi di partenza</button></p>
     <button class="cta" id="backFront" type="button" style="margin-top:12px">Torna al menu clienti</button>
     <p class="foot"><button type="button" id="resetDemo" style="border:0;background:none;color:var(--muted);text-decoration:underline;font-weight:700">Azzera la demo</button></p>
   </main>
@@ -234,8 +244,11 @@ function renderModes(){
   $("#modes").innerHTML=MODES.map(m=>`<button type="button" class="mode" data-mode="${m.id}" aria-pressed="${m.id===mode}">${m.ic}<strong>${m.t}</strong><span>${m.s}</span></button>`).join("");
 }
 function renderMenu(){
-  $("#tabs").innerHTML=MENU.map(c=>`<button type="button" class="tab" role="tab" data-tab="${c.id}" aria-selected="${c.id===tab}">${c.name}</button>`).join("");
-  $("#menu").innerHTML=MENU.map(c=>`<section class="cat" id="cat-${c.id}"><h2>${c.name}</h2><p>${c.sub}</p><div class="items">${c.items.map(i=>`
+  const LIVE=MENU.map(c=>({...c,items:c.items.filter(i=>!i.off)})).filter(c=>c.items.length);
+  if(!LIVE.some(c=>c.id===tab)&&LIVE[0])tab=LIVE[0].id;
+  for(const id in cart)if(find(id).off)delete cart[id];
+  $("#tabs").innerHTML=LIVE.map(c=>`<button type="button" class="tab" role="tab" data-tab="${c.id}" aria-selected="${c.id===tab}">${c.name}</button>`).join("");
+  $("#menu").innerHTML=(LIVE.length?"":`<p class="empty">Oggi il menu è vuoto: torna più tardi!</p>`)+LIVE.map(c=>`<section class="cat" id="cat-${c.id}"><h2>${c.name}</h2><p>${c.sub}</p><div class="items">${c.items.map(i=>`
     <div class="item">${cookieSVG(i.k)}<div style="min-width:0"><h3>${i.n}${i.t?`<span class="tag">${i.t}</span>`:""}</h3><p>${i.d}</p><div class="price">${eur(i.p)}</div></div>
     <div class="step">${cart[i.id]?`<button type="button" data-dec="${i.id}" aria-label="Togli ${i.n}">−</button><output>${cart[i.id]}</output>`:""}<button type="button" class="add" data-inc="${i.id}" aria-label="Aggiungi ${i.n}">+</button></div></div>`).join("")}</div></section>`).join("");
   renderBar();
@@ -293,8 +306,17 @@ function applyPrices(){let saved={};try{saved=JSON.parse(localStorage.getItem("t
   allItems().forEach(i=>{const v=saved[i.id];i.p=(typeof v==="number"&&v>0)?v:BASE_PRICES[i.id]})}
 function savePrices(){const o={};allItems().forEach(i=>{if(i.p!==BASE_PRICES[i.id])o[i.id]=i.p});try{localStorage.setItem("tomm-prices",JSON.stringify(o))}catch(e){}}
 applyPrices();
+function applyOff(){let off=[];try{off=JSON.parse(localStorage.getItem("tomm-off")||"[]")||[]}catch(e){}
+  allItems().forEach(i=>{i.off=off.includes(i.id)})}
+function saveOff(){try{localStorage.setItem("tomm-off",JSON.stringify(allItems().filter(i=>i.off).map(i=>i.id)))}catch(e){}}
+applyOff();
+function setOn(inp){
+  const it=find(inp.dataset.on);it.off=!inp.checked;saveOff();renderPrices();renderMenu();
+  $("#savedMsg").style.color="";$("#savedMsg").textContent=it.off?`${it.n} è spento: i clienti non lo vedono più.`:`${it.n} è di nuovo nel menu.`;
+  document.getElementById("on-"+it.id)?.focus();
+}
 function renderPrices(){
-  $("#prices").innerHTML=MENU.map(c=>`<h3>${c.name}</h3>${c.items.map(i=>`<div class="prow${i.p!==BASE_PRICES[i.id]?" changed":""}"><span>${i.n}${i.p!==BASE_PRICES[i.id]?`<small>prima ${eur(BASE_PRICES[i.id])}</small>`:""}</span><label class="pin" for="pr-${i.id}"><input id="pr-${i.id}" data-price="${i.id}" inputmode="decimal" value="${i.p.toFixed(2).replace(".",",")}" aria-label="Prezzo ${i.n}"><b>€</b></label></div>`).join("")}`).join("");
+  $("#prices").innerHTML=MENU.map(c=>`<h3>${c.name}</h3>${c.items.map(i=>`<div class="prow${i.p!==BASE_PRICES[i.id]?" changed":""}${i.off?" off":""}"><span>${i.n}${i.p!==BASE_PRICES[i.id]?`<small>prima ${eur(BASE_PRICES[i.id])}</small>`:""}</span><label class="sw" for="on-${i.id}"><input type="checkbox" role="switch" id="on-${i.id}" data-on="${i.id}"${i.off?"":" checked"} aria-label="${i.n} nel menu"><i></i><em>${i.off?"Spento":"Nel menu"}</em></label><label class="pin" for="pr-${i.id}"><input id="pr-${i.id}" data-price="${i.id}" inputmode="decimal" value="${i.p.toFixed(2).replace(".",",")}" aria-label="Prezzo ${i.n}"><b>€</b></label></div>`).join("")}`).join("");
 }
 function setPrice(inp){
   const v=parseFloat(inp.value.replace(",",".").replace(/[^\d.]/g,""));const it=find(inp.dataset.price);
@@ -363,12 +385,12 @@ document.addEventListener("click",e=>{
     const{t}=totals();ORDERS.unshift({code:"T-"+(215+ORDERS.filter(o=>!o.ex).length),name:f.name,mode,when:slot,items:Object.entries(cart),total:t,paid:false,status:"new",note:f.note});saveOrders(ORDERS);return}
   if(b.id==="seeShop"){closeSheet();go("shop");return}
   if(b.id==="backFront"){go("front");return}
-  if(b.id==="resetPrices"){try{localStorage.removeItem("tomm-prices")}catch(e){}applyPrices();renderPrices();renderMenu();$("#savedMsg").style.color="";$("#savedMsg").textContent="Prezzi di partenza ripristinati.";return}
+  if(b.id==="resetPrices"){try{localStorage.removeItem("tomm-prices");localStorage.removeItem("tomm-off")}catch(e){}applyPrices();applyOff();renderPrices();renderMenu();$("#savedMsg").style.color="";$("#savedMsg").textContent="Prodotti e prezzi di partenza ripristinati.";return}
   if(b.id==="resetDemo"){ORDERS=seed();saveOrders(ORDERS);renderShop();return}
   if(b.dataset.st){const[i,s]=b.dataset.st.split(":");ORDERS[i].status=s;if(s==="done")ORDERS[i].paid=true;saveOrders(ORDERS);renderShop();return}
 });
 document.addEventListener("input",e=>{if(mode==="whatsapp"&&$("#waPreview")&&e.target.closest("#panel"))updateWA()});
-document.addEventListener("change",e=>{if(e.target.dataset.price)setPrice(e.target)});
+document.addEventListener("change",e=>{if(e.target.dataset.price)setPrice(e.target);if(e.target.dataset.on)setOn(e.target)});
 document.addEventListener("keydown",e=>{if(e.key==="Enter"&&e.target.dataset.price)e.target.blur()});
 $("#sheet").addEventListener("click",e=>{if(e.target.id==="sheet")closeSheet()});
 document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!$("#sheet").hidden)closeSheet()});
@@ -377,6 +399,7 @@ window.addEventListener("hashchange",()=>{const v=location.hash==="#negozio"?"sh
 cart={nutella:2,classic:1};
 renderModes();renderMenu();route();
 </script>
+
 
 </body>
 </html>
